@@ -23,17 +23,28 @@
         <h2>プレイを始める</h2>
         <p class="muted">プレイヤー名を入力してスタートボタンを押してください。</p>
         <form id="player-form">
-          <label for="player-name" class="sr-only">プレイヤー名</label>
-          <input
-            id="player-name"
-            type="text"
-            name="playerName"
-            required
-            maxlength="32"
-            placeholder="プレイヤー名"
-            autocomplete="off"
-          />
-          <button type="submit" class="primary">クイズを開始</button>
+          <div class="form-field">
+            <label for="player-name">プレイヤー名</label>
+            <input
+              id="player-name"
+              type="text"
+              name="playerName"
+              required
+              maxlength="32"
+              placeholder="プレイヤー名"
+              autocomplete="off"
+            />
+          </div>
+          <div class="form-field">
+            <label for="question-count">出題数</label>
+            <select id="question-count" name="questionCount">
+              <option value="5">5問</option>
+              <option value="10" selected>10問</option>
+              <option value="15">15問</option>
+              <option value="20">20問</option>
+            </select>
+          </div>
+          <button id="start-btn" type="submit" class="primary">クイズを開始</button>
         </form>
       </section>
 
