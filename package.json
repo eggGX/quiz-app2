@@ -1,0 +1,17 @@
+{
+  "name": "quiz-app2",
+  "version": "1.0.0",
+  "description": "Multiplayer quiz app with rankings",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [
+    "quiz",
+    "http",
+    "leaderboard"
+  ],
+  "author": "",
+  "license": "MIT"
+}

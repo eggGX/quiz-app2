@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>早押しクイズチャレンジ</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="branding">
+        <h1>早押しクイズチャレンジ</h1>
+        <p>タイムアタックでスコアを競い、ランキングを更新しよう！</p>
+      </div>
+      <div class="qr-area">
+        <span>アクセス用QRコード</span>
+        <canvas id="qrCanvas" width="120" height="120" aria-label="アプリ共有用QRコード"></canvas>
+      </div>
+    </header>
+
+    <main>
+      <section id="intro" class="card">
+        <h2>プレイを始める</h2>
+        <p class="muted">プレイヤー名を入力してスタートボタンを押してください。</p>
+        <form id="player-form">
+          <label for="player-name" class="sr-only">プレイヤー名</label>
+          <input
+            id="player-name"
+            type="text"
+            name="playerName"
+            required
+            maxlength="32"
+            placeholder="プレイヤー名"
+            autocomplete="off"
+          />
+          <button type="submit" class="primary">クイズを開始</button>
+        </form>
+      </section>
+
+      <section id="quiz" class="card hidden" aria-live="polite">
+        <div class="quiz-status">
+          <div id="question-counter" class="status-item">1 / 10</div>
+          <div id="timer" class="status-item">00:00</div>
+        </div>
+        <div class="question-wrapper">
+          <h2 id="question-text"></h2>
+        </div>
+        <div id="choices" class="choices" role="list"></div>
+        <div class="quiz-actions">
+          <button id="prev-btn" type="button" class="ghost">前の問題</button>
+          <button id="next-btn" type="button" class="primary">次の問題</button>
+        </div>
+        <div class="progress-wrapper">
+          <div id="progress-bar" class="progress-bar"></div>
+        </div>
+      </section>
+
+      <section id="result" class="card hidden">
+        <h2>結果</h2>
+        <p class="result-summary">
+          <span id="result-score"></span>
+          <span id="result-time" class="result-time"></span>
+        </p>
+        <button id="retry-btn" type="button" class="ghost">もう一度プレイ</button>
+      </section>
+
+      <section id="leaderboard" class="card">
+        <div class="leaderboard-header">
+          <h2>ランキング</h2>
+          <button id="refresh-btn" type="button" class="ghost sm">更新</button>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">順位</th>
+                <th scope="col">プレイヤー</th>
+                <th scope="col">スコア</th>
+                <th scope="col">タイム</th>
+                <th scope="col">記録日時</th>
+              </tr>
+            </thead>
+            <tbody id="leaderboard-body">
+              <tr>
+                <td colspan="5" class="muted">記録がありません。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <small>&copy; 2025 早押しクイズチャレンジ</small>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js" integrity="sha384-nQdlqzTeWY5Avzkdxl3pNGdisz8Iky3Uczdlz7YT1Do1B4ezgmO6ijLJrVN6a8GN" crossorigin="anonymous"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
