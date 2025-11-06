@@ -4,6 +4,7 @@ const path = require('path');
 const { URL } = require('url');
 
 const questions = require('./data/questions');
+const questionIdSet = new Set(questions.map(question => question.id));
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -67,9 +68,55 @@ function sendJson(res, statusCode, data) {
   res.end(payload);
 }
 
+function normalizeAnswers(rawAnswers) {
+  if (!Array.isArray(rawAnswers)) {
+    return null;
+  }
+
+  const map = new Map();
+
+  rawAnswers.forEach((entry, index) => {
+    if (entry && typeof entry === 'object' && typeof entry.questionId === 'number' && typeof entry.choiceIndex === 'number') {
+      if (!questionIdSet.has(entry.questionId) || map.has(entry.questionId)) {
+        return;
+      }
+      map.set(entry.questionId, entry.choiceIndex);
+      return;
+    }
+
+    if (typeof entry === 'number' && index < questions.length) {
+      const questionId = questions[index].id;
+      if (!questionIdSet.has(questionId) || map.has(questionId)) {
+        return;
+      }
+      map.set(questionId, entry);
+    }
+  });
+
+  if (map.size !== questionIdSet.size) {
+    return null;
+  }
+
+  return map;
+}
+
+function shuffleQuestions(list) {
+  const copy = list.map(question => ({
+    ...question,
+    choices: Array.isArray(question.choices) ? [...question.choices] : []
+  }));
+
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+
+  return copy;
+}
+
 async function handleApiRequest(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/quiz') {
-    sendJson(res, 200, { questions });
+    sendJson(res, 200, { questions: shuffleQuestions(questions) });
     return true;
   }
 
@@ -92,7 +139,7 @@ async function handleApiRequest(req, res, url) {
       try {
         const payload = JSON.parse(body || '{}');
         const name = sanitizeName(payload.playerName || '');
-        const answers = Array.isArray(payload.answers) ? payload.answers : [];
+        const answerMap = normalizeAnswers(payload.answers);
         const totalTime = typeof payload.totalTime === 'number' && payload.totalTime >= 0 ? Number(payload.totalTime) : null;
 
         if (!name) {
@@ -100,13 +147,17 @@ async function handleApiRequest(req, res, url) {
           return;
         }
 
-        if (answers.length !== questions.length) {
+        if (!answerMap) {
           sendJson(res, 400, { error: '回答数が問題数と一致しません。' });
           return;
         }
 
         const score = questions.reduce((acc, question, index) => {
-          return acc + (question.answer === answers[index] ? 1 : 0);
+          const selected = answerMap.get(question.id);
+          if (typeof selected !== 'number') {
+            return acc;
+          }
+          return acc + (question.answer === selected ? 1 : 0);
         }, 0);
 
         const leaderboard = await readLeaderboard();

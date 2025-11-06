@@ -1,7 +1,9 @@
 (() => {
   const state = {
+    originalQuestions: [],
     questions: [],
     answers: [],
+    feedback: [],
     currentIndex: 0,
     startTime: null,
     timerInterval: null
@@ -21,6 +23,7 @@
     progressBar: document.getElementById('progress-bar'),
     counter: document.getElementById('question-counter'),
     timer: document.getElementById('timer'),
+    feedback: document.getElementById('answer-feedback'),
     resultScore: document.getElementById('result-score'),
     resultTime: document.getElementById('result-time'),
     retryButton: document.getElementById('retry-btn'),
@@ -65,13 +68,40 @@
   }
 
   function updateProgress() {
-    const progress = ((state.currentIndex) / state.questions.length) * 100;
+    if (!state.questions.length) {
+      elements.progressBar.style.width = '0%';
+      elements.counter.textContent = '0 / 0';
+      return;
+    }
+
+    const progress = (state.currentIndex / state.questions.length) * 100;
     elements.progressBar.style.width = `${progress}%`;
     elements.counter.textContent = `${state.currentIndex + 1} / ${state.questions.length}`;
   }
 
+  function updateFeedbackDisplay() {
+    if (!elements.feedback) {
+      return;
+    }
+
+    const feedback = state.feedback[state.currentIndex];
+
+    if (!feedback) {
+      elements.feedback.textContent = '';
+      elements.feedback.className = 'feedback';
+      return;
+    }
+
+    const className = feedback.status === 'correct' ? 'feedback correct' : 'feedback incorrect';
+    elements.feedback.className = className;
+    elements.feedback.textContent = feedback.message;
+  }
+
   function renderChoices(question) {
     elements.choices.innerHTML = '';
+
+    const selectedIndex = state.answers[state.currentIndex];
+    const feedback = state.feedback[state.currentIndex];
 
     question.choices.forEach((choiceText, index) => {
       const button = document.createElement('button');
@@ -80,24 +110,55 @@
       button.textContent = choiceText;
       button.dataset.index = index;
 
-      if (state.answers[state.currentIndex] === index) {
+      if (selectedIndex === index) {
         button.classList.add('selected');
+        if (feedback) {
+          if (feedback.status === 'correct') {
+            button.classList.add('correct-choice');
+          } else if (feedback.status === 'incorrect') {
+            button.classList.add('incorrect-choice');
+          }
+        }
+      }
+
+      if (feedback && feedback.status === 'incorrect' && question.answer === index) {
+        button.classList.add('correct-choice');
       }
 
       button.addEventListener('click', () => {
-        state.answers[state.currentIndex] = index;
-        [...elements.choices.querySelectorAll('.choice')].forEach(choiceEl => choiceEl.classList.remove('selected'));
-        button.classList.add('selected');
-        updateNavigationButtons();
+        handleChoiceSelection(index);
       });
 
       elements.choices.appendChild(button);
     });
   }
 
+  function handleChoiceSelection(selectedIndex) {
+    const question = state.questions[state.currentIndex];
+    if (!question) {
+      return;
+    }
+
+    state.answers[state.currentIndex] = selectedIndex;
+
+    const isCorrect = selectedIndex === question.answer;
+    const correctChoiceText = question.choices[question.answer];
+    state.feedback[state.currentIndex] = {
+      status: isCorrect ? 'correct' : 'incorrect',
+      message: isCorrect ? '正解です！' : `不正解… 正解は「${correctChoiceText}」です。`
+    };
+
+    renderChoices(question);
+    updateNavigationButtons();
+    updateFeedbackDisplay();
+  }
+
   function renderQuestion() {
     const question = state.questions[state.currentIndex];
     if (!question) {
+      elements.questionText.textContent = '問題を読み込めませんでした。';
+      elements.choices.innerHTML = '';
+      updateFeedbackDisplay();
       return;
     }
 
@@ -105,6 +166,38 @@
     renderChoices(question);
     updateNavigationButtons();
     updateProgress();
+    updateFeedbackDisplay();
+  }
+
+  function shuffleQuestions(questions) {
+    const copy = questions.map(question => ({
+      ...question,
+      choices: Array.isArray(question.choices) ? [...question.choices] : []
+    }));
+
+    for (let i = copy.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+
+    return copy;
+  }
+
+  function prepareNewQuiz() {
+    if (!state.originalQuestions.length) {
+      state.questions = [];
+      state.answers = [];
+      state.feedback = [];
+      state.currentIndex = 0;
+      updateFeedbackDisplay();
+      return;
+    }
+
+    state.questions = shuffleQuestions(state.originalQuestions);
+    state.answers = new Array(state.questions.length).fill(null);
+    state.feedback = new Array(state.questions.length).fill(null);
+    state.currentIndex = 0;
+    renderQuestion();
   }
 
   async function fetchQuestions() {
@@ -117,9 +210,11 @@
       if (!Array.isArray(data.questions) || data.questions.length === 0) {
         throw new Error('クイズデータがありません。');
       }
-      state.questions = data.questions;
-      state.answers = new Array(state.questions.length).fill(null);
-      renderQuestion();
+      state.originalQuestions = data.questions.map(question => ({
+        ...question,
+        choices: Array.isArray(question.choices) ? [...question.choices] : []
+      }));
+      prepareNewQuiz();
     } catch (error) {
       console.error(error);
       elements.questionText.textContent = 'クイズの読み込みに失敗しました。ページを再読み込みしてください。';
@@ -170,8 +265,10 @@
       const nameCell = document.createElement('td');
       nameCell.textContent = entry.name;
 
+      const totalQuestions = state.originalQuestions.length || state.questions.length;
       const scoreCell = document.createElement('td');
-      scoreCell.textContent = `${entry.score} / ${state.questions.length}`;
+      const totalLabel = totalQuestions ? totalQuestions : '-';
+      scoreCell.textContent = `${entry.score} / ${totalLabel}`;
 
       const timeCell = document.createElement('td');
       timeCell.textContent = typeof entry.totalTime === 'number' ? `${entry.totalTime.toFixed(2)}秒` : '-';
@@ -194,6 +291,18 @@
     stopTimer();
     const totalTime = (Date.now() - state.startTime) / 1000;
 
+    const answerPayload = state.questions.map((question, index) => ({
+      questionId: question.id,
+      choiceIndex: state.answers[index]
+    }));
+
+    if (answerPayload.some(entry => typeof entry.choiceIndex !== 'number')) {
+      elements.resultScore.textContent = '未回答の問題があります。すべての問題に回答してください。';
+      elements.resultTime.textContent = '';
+      elements.result.classList.remove('hidden');
+      return;
+    }
+
     try {
       const response = await fetch('/api/submit', {
         method: 'POST',
@@ -202,7 +311,7 @@
         },
         body: JSON.stringify({
           playerName: elements.nameInput.value,
-          answers: state.answers,
+          answers: answerPayload,
           totalTime
         })
       });
@@ -230,14 +339,12 @@
   }
 
   function resetQuizState() {
-    state.answers = new Array(state.questions.length).fill(null);
-    state.currentIndex = 0;
+    prepareNewQuiz();
     stopTimer();
     state.startTime = null;
     elements.timer.textContent = '00:00';
     elements.result.classList.add('hidden');
     elements.quiz.classList.remove('hidden');
-    renderQuestion();
     startTimer();
   }
 
@@ -249,12 +356,10 @@
         elements.nameInput.focus();
         return;
       }
+      prepareNewQuiz();
       elements.intro.classList.add('hidden');
       elements.quiz.classList.remove('hidden');
-      state.currentIndex = 0;
-      state.answers = new Array(state.questions.length).fill(null);
       startTimer();
-      renderQuestion();
     });
 
     elements.nextButton.addEventListener('click', () => {
