@@ -103,8 +103,22 @@ main {
   margin-top: 1.5rem;
 }
 
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  flex: 1 1 220px;
+}
+
+.form-field label {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  letter-spacing: 0.03em;
+}
+
 #player-name {
   flex: 1 1 220px;
+  width: 100%;
   border-radius: 14px;
   border: 1px solid transparent;
   padding: 0.9rem 1.1rem;
@@ -118,6 +132,28 @@ main {
 #player-name:focus {
   border-color: var(--primary);
   transform: translateY(-2px);
+}
+
+#question-count {
+  width: 100%;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  padding: 0.9rem 1.1rem;
+  font-size: 1rem;
+  background: var(--surface-light);
+  color: var(--text);
+  outline: none;
+  transition: border-color 150ms ease, transform 150ms ease;
+}
+
+#question-count:focus {
+  border-color: var(--primary);
+  transform: translateY(-2px);
+}
+
+#question-count:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 button {

@@ -1,4 +1,6 @@
 (() => {
+  const DEFAULT_QUESTION_COUNT = 10;
+
   const state = {
     originalQuestions: [],
     questions: [],
@@ -6,7 +8,9 @@
     feedback: [],
     currentIndex: 0,
     startTime: null,
-    timerInterval: null
+    timerInterval: null,
+    selectedQuestionCount: DEFAULT_QUESTION_COUNT,
+    isFetchingQuestions: false
   };
 
   const elements = {
@@ -28,7 +32,9 @@
     resultTime: document.getElementById('result-time'),
     retryButton: document.getElementById('retry-btn'),
     refreshButton: document.getElementById('refresh-btn'),
-    leaderboardBody: document.getElementById('leaderboard-body')
+    leaderboardBody: document.getElementById('leaderboard-body'),
+    questionCountSelect: document.getElementById('question-count'),
+    startButton: document.getElementById('start-btn')
   };
 
   function formatTime(seconds) {
@@ -61,6 +67,13 @@
   }
 
   function updateNavigationButtons() {
+    if (!state.questions.length) {
+      elements.prevButton.disabled = true;
+      elements.nextButton.disabled = true;
+      elements.nextButton.textContent = '次の問題';
+      return;
+    }
+
     elements.prevButton.disabled = state.currentIndex === 0;
     elements.nextButton.textContent = state.currentIndex === state.questions.length - 1 ? '結果を見る' : '次の問題';
     const answered = typeof state.answers[state.currentIndex] === 'number';
@@ -74,7 +87,7 @@
       return;
     }
 
-    const progress = (state.currentIndex / state.questions.length) * 100;
+    const progress = ((state.currentIndex + 1) / state.questions.length) * 100;
     elements.progressBar.style.width = `${progress}%`;
     elements.counter.textContent = `${state.currentIndex + 1} / ${state.questions.length}`;
   }
@@ -190,6 +203,8 @@
       state.feedback = [];
       state.currentIndex = 0;
       updateFeedbackDisplay();
+      updateProgress();
+      updateNavigationButtons();
       return;
     }
 
@@ -200,9 +215,25 @@
     renderQuestion();
   }
 
-  async function fetchQuestions() {
+  function setQuizLoading(isLoading) {
+    state.isFetchingQuestions = isLoading;
+    if (elements.startButton) {
+      elements.startButton.disabled = isLoading;
+    }
+    if (elements.questionCountSelect) {
+      elements.questionCountSelect.disabled = isLoading;
+    }
+  }
+
+  async function fetchQuestions(limit = state.selectedQuestionCount || DEFAULT_QUESTION_COUNT) {
+    if (state.isFetchingQuestions) {
+      return;
+    }
+
+    setQuizLoading(true);
     try {
-      const response = await fetch('/api/quiz');
+      const params = new URLSearchParams({ limit: String(limit) });
+      const response = await fetch(`/api/quiz?${params.toString()}`);
       if (!response.ok) {
         throw new Error('クイズデータを読み込めませんでした。');
       }
@@ -214,12 +245,28 @@
         ...question,
         choices: Array.isArray(question.choices) ? [...question.choices] : []
       }));
+      state.selectedQuestionCount = typeof data.total === 'number' ? data.total : state.originalQuestions.length;
+      if (elements.questionCountSelect) {
+        const desiredValue = String(state.selectedQuestionCount);
+        const hasOption = Array.from(elements.questionCountSelect.options || []).some(option => option.value === desiredValue);
+        if (!hasOption) {
+          const option = document.createElement('option');
+          option.value = desiredValue;
+          option.textContent = `${desiredValue}問`;
+          option.selected = true;
+          elements.questionCountSelect.appendChild(option);
+        } else if (elements.questionCountSelect.value !== desiredValue) {
+          elements.questionCountSelect.value = desiredValue;
+        }
+      }
       prepareNewQuiz();
     } catch (error) {
       console.error(error);
       elements.questionText.textContent = 'クイズの読み込みに失敗しました。ページを再読み込みしてください。';
       elements.choices.innerHTML = '';
       elements.nextButton.disabled = true;
+    } finally {
+      setQuizLoading(false);
     }
   }
 
@@ -265,9 +312,10 @@
       const nameCell = document.createElement('td');
       nameCell.textContent = entry.name;
 
-      const totalQuestions = state.originalQuestions.length || state.questions.length;
       const scoreCell = document.createElement('td');
-      const totalLabel = totalQuestions ? totalQuestions : '-';
+      const totalLabel = typeof entry.totalQuestions === 'number' && entry.totalQuestions > 0
+        ? entry.totalQuestions
+        : (state.originalQuestions.length || state.questions.length || '-');
       scoreCell.textContent = `${entry.score} / ${totalLabel}`;
 
       const timeCell = document.createElement('td');
@@ -322,7 +370,8 @@
       }
 
       const data = await response.json();
-      const scoreText = `スコア: ${data.score} / ${data.total}`;
+      const totalQuestions = typeof data.total === 'number' ? data.total : state.questions.length;
+      const scoreText = `スコア: ${data.score} / ${totalQuestions}`;
       const timeText = `タイム: ${totalTime.toFixed(2)}秒`;
       elements.resultScore.textContent = scoreText;
       elements.resultTime.textContent = timeText;
@@ -354,6 +403,9 @@
       const name = elements.nameInput.value.trim();
       if (!name) {
         elements.nameInput.focus();
+        return;
+      }
+      if (state.isFetchingQuestions || !state.originalQuestions.length) {
         return;
       }
       prepareNewQuiz();
@@ -388,6 +440,16 @@
     elements.refreshButton.addEventListener('click', () => {
       fetchLeaderboard();
     });
+
+    if (elements.questionCountSelect) {
+      elements.questionCountSelect.addEventListener('change', async (event) => {
+        const value = Number(event.target.value);
+        if (Number.isFinite(value) && value > 0) {
+          state.selectedQuestionCount = value;
+          await fetchQuestions(value);
+        }
+      });
+    }
   }
 
   function renderQrCode() {
@@ -406,7 +468,7 @@
   async function init() {
     setupEventListeners();
     renderQrCode();
-    await fetchQuestions();
+    await fetchQuestions(DEFAULT_QUESTION_COUNT);
     await fetchLeaderboard();
   }
 

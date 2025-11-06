@@ -5,6 +5,9 @@ const { URL } = require('url');
 
 const questions = require('./data/questions');
 const questionIdSet = new Set(questions.map(question => question.id));
+const questionMap = new Map(questions.map(question => [question.id, question]));
+
+const DEFAULT_QUESTION_COUNT = 10;
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
@@ -69,7 +72,7 @@ function sendJson(res, statusCode, data) {
 }
 
 function normalizeAnswers(rawAnswers) {
-  if (!Array.isArray(rawAnswers)) {
+  if (!Array.isArray(rawAnswers) || rawAnswers.length === 0) {
     return null;
   }
 
@@ -93,7 +96,7 @@ function normalizeAnswers(rawAnswers) {
     }
   });
 
-  if (map.size !== questionIdSet.size) {
+  if (map.size !== rawAnswers.length) {
     return null;
   }
 
@@ -114,9 +117,33 @@ function shuffleQuestions(list) {
   return copy;
 }
 
+function clampQuestionCount(value) {
+  if (value === null || value === undefined || value === '') {
+    return DEFAULT_QUESTION_COUNT;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return DEFAULT_QUESTION_COUNT;
+  }
+
+  const truncated = Math.trunc(parsed);
+  if (truncated < 1) {
+    return 1;
+  }
+
+  if (truncated > questions.length) {
+    return questions.length;
+  }
+
+  return truncated;
+}
+
 async function handleApiRequest(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/quiz') {
-    sendJson(res, 200, { questions: shuffleQuestions(questions) });
+    const limit = clampQuestionCount(url.searchParams.get('limit'));
+    const selected = shuffleQuestions(questions).slice(0, limit);
+    sendJson(res, 200, { questions: selected, total: selected.length });
     return true;
   }
 
@@ -147,12 +174,19 @@ async function handleApiRequest(req, res, url) {
           return;
         }
 
-        if (!answerMap) {
-          sendJson(res, 400, { error: '回答数が問題数と一致しません。' });
+        if (!answerMap || answerMap.size === 0) {
+          sendJson(res, 400, { error: '回答データが不足しています。' });
           return;
         }
 
-        const score = questions.reduce((acc, question, index) => {
+        const answeredQuestions = Array.from(answerMap.keys()).map(id => questionMap.get(id));
+        if (answeredQuestions.some(question => !question)) {
+          sendJson(res, 400, { error: '存在しない問題への回答が含まれています。' });
+          return;
+        }
+
+        const totalQuestions = answeredQuestions.length;
+        const score = answeredQuestions.reduce((acc, question) => {
           const selected = answerMap.get(question.id);
           if (typeof selected !== 'number') {
             return acc;
@@ -165,6 +199,7 @@ async function handleApiRequest(req, res, url) {
         const newEntry = {
           name,
           score,
+          totalQuestions,
           totalTime: totalTime !== null ? Number(totalTime.toFixed(2)) : null,
           completedAt
         };
@@ -186,7 +221,7 @@ async function handleApiRequest(req, res, url) {
 
         sendJson(res, 200, {
           score,
-          total: questions.length,
+          total: totalQuestions,
           leaderboard: sorted
         });
       } catch (error) {
